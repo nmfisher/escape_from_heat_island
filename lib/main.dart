@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_filament/widgets/entity_controller_mouse_widget.dart';
 import 'package:flutter_filament/widgets/filament_gesture_detector.dart';
 import 'package:flutter_filament/widgets/filament_widget.dart';
@@ -46,9 +45,8 @@ class _MyHomePageState extends State<MyHomePage> {
 
     viewModel.initialize().then((_) async {
       await windowManager.ensureInitialized();
-      windowManager.setFullScreen(true);
+      // windowManager.setFullScreen(true);
       setState(() {});
-      print("viewModel.playerController ${viewModel.playerController}");
     });
   }
 
@@ -59,6 +57,7 @@ class _MyHomePageState extends State<MyHomePage> {
       children: [
         Positioned.fill(
             child: FilamentGestureDetector(
+                listenerEnabled: false,
                 controller: viewModel.filamentController,
                 child: EntityTransformMouseControllerWidget(
                     transformController: viewModel.playerController,
