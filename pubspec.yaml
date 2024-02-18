@@ -36,19 +36,19 @@ dependencies:
   # The following adds the Cupertino Icons font to your application.
   # Use with the CupertinoIcons class for iOS style icons.
   cupertino_icons: ^1.0.2
-  audio_session:
-  flutter_sound:
-  just_audio:
-  just_audio_mpv: 
-  just_audio_windows: 
-  audioplayers:
+  # audio_session:
+  # flutter_sound:
+  # just_audio:
+  # just_audio_mpv: 
+  # just_audio_windows: 
+  # audioplayers:
   wave_builder:
     git:
       url: https://github.com/nmfisher/wave_builder.git
   pointer_lock:
     git:
       url: https://github.com/helgoboss/pointer_lock.git
-  window_manager: ^0.3.8
+  window_manager: ^0.3.8 
 dev_dependencies:
   flutter_test:
     sdk: flutter
