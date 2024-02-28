@@ -1,23 +1,22 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/widgets.dart';
 import 'package:untitled_flutter_game_project/game_view_model.dart';
 
-class TileMenu extends StatefulWidget {
+class ContextMenuWidget extends StatefulWidget {
   final GameViewModel viewModel;
 
-  const TileMenu({super.key, required this.viewModel});
+  const ContextMenuWidget({super.key, required this.viewModel});
   @override
   State<StatefulWidget> createState() => _TileMenuState();
 }
 
-class _TileMenuState extends State<TileMenu>
+class _TileMenuState extends State<ContextMenuWidget>
     with SingleTickerProviderStateMixin {
   late AnimationController _scaleController;
   @override
   void initState() {
     super.initState();
-    _scaleController =
-        AnimationController(vsync: this, duration: Duration(milliseconds: 250));
+    _scaleController = AnimationController(
+        vsync: this, duration: const Duration(milliseconds: 250));
     WidgetsBinding.instance.addPostFrameCallback((timeStamp) {
       _scaleController.forward();
     });
@@ -33,11 +32,13 @@ class _TileMenuState extends State<TileMenu>
   Widget build(BuildContext context) {
     return ScaleTransition(
         scale: _scaleController,
-        child: Listener(
-            onPointerDown: (_) {
-              widget.viewModel.plantTree();
-            },
-            child: Container(
-                color: Colors.white, child: const Text("PLANT TREE"))));
+        child: Column(
+            children: widget.viewModel.contextMenu.value!.labels
+                .map((label) => Listener(
+                    onPointerDown: (_) {
+                      widget.viewModel.contextMenu.value!.click(label);
+                    },
+                    child: Container(color: Colors.white, child: Text(label))))
+                .toList()));
   }
 }

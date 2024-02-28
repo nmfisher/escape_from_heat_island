@@ -100,7 +100,7 @@ class _TemperatureWidgetState extends State<TemperatureWidget>
   Widget build(BuildContext context) {
     return GestureDetector(
         onTap: () async {
-          widget.viewModel.temperature.value -= 10.0;
+          widget.viewModel.temperature.value += 10.0;
         },
         child: Transform(
             transform: Matrix4.translation(_shaking
