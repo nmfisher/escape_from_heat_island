@@ -34,11 +34,25 @@ class _TileMenuState extends State<ContextMenuWidget>
         scale: _scaleController,
         child: Column(
             children: widget.viewModel.contextMenu.value!.labels
-                .map((label) => Listener(
-                    onPointerDown: (_) {
-                      widget.viewModel.contextMenu.value!.click(label);
-                    },
-                    child: Container(color: Colors.white, child: Text(label))))
+                .map((label) => MouseRegion(
+                    cursor: SystemMouseCursors.click,
+                    child: Listener(
+                        onPointerDown: (_) {
+                          widget.viewModel.contextMenu.value!.click(label);
+                        },
+                        child: Container(
+                            decoration: const BoxDecoration(
+                                color: Colors.transparent,
+                                image: DecorationImage(
+                                    image: AssetImage(
+                                        "assets_new/ui/empty button.png"))),
+                            child: Padding(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 20, vertical: 10),
+                                child: Text(label,
+                                    style: const TextStyle(
+                                        fontFamily: "Lilita",
+                                        color: Color(0xFF391f00))))))))
                 .toList()));
   }
 }

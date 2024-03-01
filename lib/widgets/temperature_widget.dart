@@ -28,8 +28,9 @@ class _TemperatureWidgetState extends State<TemperatureWidget>
   double _tempDelta = 0.0;
   double _temperature = 0.0;
   late AnimationController _shakeController;
-  late AnimationController _scaleController;
-  late Animation<double> _scaleAnimation;
+  // late AnimationController _scaleController;
+  double _scale = 1.0;
+  // late Animation<double> _scaleAnimation;
   late AnimationController _temperatureController;
 
   @override
@@ -41,14 +42,14 @@ class _TemperatureWidgetState extends State<TemperatureWidget>
 
     widget.viewModel.temperature.addListener(_onTemperatureChange);
 
-    _scaleController = AnimationController(
-        vsync: this, duration: const Duration(milliseconds: 200));
+    // _scaleController = AnimationController(
+    //     vsync: this, duration: const Duration(milliseconds: 200));
     _temperatureController = AnimationController(
         vsync: this, duration: const Duration(milliseconds: 1000));
 
-    _scaleController.addListener(() {
-      setState(() {});
-    });
+    // _scaleController.addListener(() {
+    //   setState(() {});
+    // });
     _temperatureController.addListener(() {
       var extraWidth = _maxWidth - _baseWidth;
       var numerator =
@@ -60,8 +61,8 @@ class _TemperatureWidgetState extends State<TemperatureWidget>
       _width = _baseWidth + (tempRatio * extraWidth);
       setState(() {});
     });
-    _scaleAnimation =
-        _scaleController.drive(CurveTween(curve: Curves.easeInQuad));
+    // _scaleAnimation =
+    //     _scaleController.drive(CurveTween(curve: Curves.easeInQuad));
   }
 
   Timer? _shakeTimer;
@@ -69,11 +70,17 @@ class _TemperatureWidgetState extends State<TemperatureWidget>
 
   void _onTemperatureChange() async {
     _tempDelta = widget.viewModel.temperature.value - _temperature;
+    _scale = 1.5;
+    setState(() {});
 
-    await Future.wait(
-        [_scaleController.animateTo(1.0), _temperatureController.forward()]);
+    await Future.wait([
+      // _scaleController.animateTo(1.0),
+      _temperatureController.forward()
+    ]);
+    _scale = 1.0;
+    setState(() {});
     await Future.delayed(const Duration(milliseconds: 50));
-    await _scaleController.animateTo(0.0);
+    // await _scaleController.animateTo(0.0);
 
     if (widget.viewModel.temperature.value > 35.0) {
       _shakeDelta = widget.viewModel.temperature.value > 45.0 ? 2.0 : 1.0;
@@ -98,55 +105,60 @@ class _TemperatureWidgetState extends State<TemperatureWidget>
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-        onTap: () async {
-          widget.viewModel.temperature.value += 10.0;
-        },
-        child: Transform(
-            transform: Matrix4.translation(_shaking
-                ? v.Vector3((_rnd.nextDouble() * _shakeDelta!),
-                    (_rnd.nextDouble() * _shakeDelta!), 0.0)
-                : v.Vector3.zero()),
-            origin: Offset(1, 1),
-            alignment: Alignment.centerLeft,
-            // scale: 1 + (_scaleAnimation.value * 0.1),
-            child: Padding(
-                padding: const EdgeInsets.only(left: 20, top: 20),
-                child: SizedBox(
-                    height: 40,
-                    child: Stack(children: [
-                      Opacity(
-                          opacity: 0.7,
-                          child: Image.asset("assets_new/ui/coin bar.png")),
-                      Padding(
-                          padding: const EdgeInsets.only(
-                              top: 7, bottom: 10, left: 38),
-                          child: Container(
-                            height: 30,
-                            width: _width,
-                            decoration: BoxDecoration(
-                                color: Color.lerp(
-                                    Colors.greenAccent.shade700,
-                                    Colors.deepOrange.shade400, //0.0)
-                                    ((_temperature +
-                                                (_temperatureController.value *
-                                                    _tempDelta)) -
-                                            _baseTemp) /
-                                        (_maxTemp - _baseTemp))),
-                          )),
-                      Padding(
-                          padding: const EdgeInsets.only(left: 70, top: 8),
-                          child: Row(
-                              mainAxisAlignment: MainAxisAlignment.start,
-                              children: [
-                                Text(
-                                    "${(_temperature + (_temperatureController.value * _tempDelta)).toStringAsFixed(1)}°C ",
-                                    style: const TextStyle(
-                                        fontFamily: "Lilita",
-                                        fontSize: 14,
-                                        fontWeight: FontWeight.w100,
-                                        color: Colors.white)),
-                              ]))
-                    ])))));
+    return AnimatedScale(
+        scale: _scale,
+        duration: Duration(milliseconds: 750),
+        alignment: Alignment.centerLeft,
+        child: GestureDetector(
+            onTap: () async {
+              widget.viewModel.temperature.value += 10.0;
+            },
+            child: Transform(
+                transform: Matrix4.translation(_shaking
+                    ? v.Vector3((_rnd.nextDouble() * _shakeDelta!),
+                        (_rnd.nextDouble() * _shakeDelta!), 0.0)
+                    : v.Vector3.zero()),
+                origin: Offset(1, 1),
+                alignment: Alignment.centerLeft,
+                // scale: 1 + (_scaleAnimation.value * 0.1),
+                child: Padding(
+                    padding: const EdgeInsets.only(left: 20, top: 20),
+                    child: SizedBox(
+                        height: 40,
+                        child: Stack(children: [
+                          Opacity(
+                              opacity: 0.7,
+                              child: Image.asset("assets_new/ui/coin bar.png")),
+                          Padding(
+                              padding: const EdgeInsets.only(
+                                  top: 7, bottom: 10, left: 38),
+                              child: Container(
+                                height: 30,
+                                width: _width,
+                                decoration: BoxDecoration(
+                                    color: Color.lerp(
+                                        Colors.greenAccent.shade700,
+                                        Colors.deepOrange.shade400, //0.0)
+                                        ((_temperature +
+                                                    (_temperatureController
+                                                            .value *
+                                                        _tempDelta)) -
+                                                _baseTemp) /
+                                            (_maxTemp - _baseTemp))),
+                              )),
+                          Padding(
+                              padding: const EdgeInsets.only(left: 70, top: 8),
+                              child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                        "${(_temperature + (_temperatureController.value * _tempDelta)).toStringAsFixed(1)}°C ",
+                                        style: const TextStyle(
+                                            fontFamily: "Lilita",
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.w100,
+                                            color: Colors.white)),
+                                  ]))
+                        ]))))));
   }
 }

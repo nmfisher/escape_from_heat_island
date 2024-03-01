@@ -1,9 +1,19 @@
+import 'dart:async';
+import 'dart:io';
+import 'dart:math';
+
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_filament/filament_controller.dart';
 import 'package:flutter_filament/widgets/filament_gesture_detector.dart';
 import 'package:flutter_filament/widgets/filament_widget.dart';
+import 'package:flutter_filament/widgets/ibl_rotation_slider.dart';
+import 'package:flutter_filament/widgets/light_slider.dart';
 import 'package:untitled_flutter_game_project/game_view_model.dart';
 import 'package:untitled_flutter_game_project/widgets/intro_widget.dart';
+import 'package:untitled_flutter_game_project/widgets/start_menu.dart';
+import 'package:untitled_flutter_game_project/widgets/stroked_text.dart';
 import 'package:untitled_flutter_game_project/widgets/temperature_widget.dart';
 import 'package:untitled_flutter_game_project/widgets/tile_menu.dart';
 import 'package:window_manager/window_manager.dart';
@@ -41,20 +51,35 @@ class MyHomePage extends StatefulWidget {
 class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
   final viewModel = GameViewModel();
 
-  bool _ready = false;
-
   final List<({FilamentEntity entity, String name})> cameras = [];
+
+  int _loadingOpacity = 1;
+  Timer? _loadingTimer;
 
   @override
   void initState() {
     super.initState();
     WidgetsFlutterBinding.ensureInitialized();
 
+    if (Platform.isAndroid || Platform.isIOS) {
+      SystemChrome.setPreferredOrientations([
+        DeviceOrientation.landscapeRight,
+      ]);
+    }
+
+    _loadingTimer = Timer.periodic(Duration(milliseconds: 1000), (timer) {
+      if (_loadingOpacity == 1) {
+        _loadingOpacity = 0;
+      } else {
+        _loadingOpacity = 1;
+      }
+      setState(() {});
+    });
+
     viewModel.initialize(this).then((_) async {
       await windowManager.ensureInitialized();
+      _loadingTimer!.cancel();
       // windowManager.setFullScreen(true);
-      setState(() {});
-      _ready = true;
     });
   }
 
@@ -73,16 +98,20 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                               viewModel.closeContextMenu();
                             },
                             onPointerUp: (event) {
-                              viewModel.setCanOpenTileMenu(true);
+                              Future.delayed(Duration(milliseconds: 100))
+                                  .then((value) {
+                                viewModel.setCanOpenTileMenu(true);
+                              });
                             },
                             onPointerMove: (move) {
-                              // viewModel.setCanOpenTileMenu(false);
-                              // viewModel.cameraOrientation.position.x -=
-                              //     move.delta.dx / 10;
-                              // viewModel.filamentController.setCameraPosition(
-                              //     viewModel.cameraOrientation.position.x,
-                              //     viewModel.cameraOrientation.position.y,
-                              //     viewModel.cameraOrientation.position.z);
+                              if (viewModel.enableCameraMovement) {
+                                viewModel.setCanOpenTileMenu(false);
+                                if (move.buttons == kTertiaryButton) {
+                                  viewModel.moveCamera(z: move.delta.dy / 10);
+                                } else {
+                                  viewModel.moveCamera(x: -move.delta.dx / 10);
+                                }
+                              }
                             },
                             child: FilamentGestureDetector(
                                 enableCamera: true,
@@ -114,11 +143,17 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                               aa = !aa;
                             },
                             icon: const Icon(Icons.refresh))),
-                    if (state == GameState.Loaded)
+                    if (state == GameState.Loading)
+                      Center(
+                          child: AnimatedOpacity(
+                              opacity: _loadingOpacity.toDouble(),
+                              duration: Duration(milliseconds: 500),
+                              child: StrokedText(text: "LOADING"))),
+                    if (state == GameState.Play)
                       Positioned(
-                          top: 20,
-                          left: 20,
-                          right: 20,
+                          top: 100,
+                          left: 100,
+                          right: 100,
                           child: IntroWidget(
                             viewModel: viewModel,
                           )),
@@ -133,7 +168,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                     //             cameras: cameras))),
                     // if (state == GameState.Loaded || state == GameState.Pause)
                     //   Align(
-                    //       alignment: Alignment.bottomCenter,
+                    //       alignment: Alignment.bottomRight,
                     //       child: Container(
                     //           width: 400,
                     //           height: 400,
@@ -142,14 +177,20 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                     //             options: viewModel.lightOptions,
                     //             showControls: true,
                     //           ))),
-                    // if (state == GameState.Loaded || state == GameState.Pause)
-                    //   Center(
-                    //       child: SizedBox(
-                    //           height: 350,
-                    //           width: 250,
-                    //           child: StartMenu(
-                    //             viewModel: viewModel,
-                    //           ))),
+                    if (state == GameState.Loaded || state == GameState.Pause)
+                      Align(
+                          alignment: Alignment.bottomRight,
+                          child: Container(
+                              width: 400,
+                              height: 400,
+                              child: IblRotationSliderWidget(
+                                controller: viewModel.filamentController,
+                              ))),
+                    if (state == GameState.Loaded || state == GameState.Pause)
+                      Center(
+                          child: StartMenu(
+                        viewModel: viewModel,
+                      )),
                     if (state == GameState.Play)
                       Align(
                           alignment: Alignment.topLeft,
