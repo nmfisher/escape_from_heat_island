@@ -58,7 +58,8 @@ class _TemperatureWidgetState extends State<TemperatureWidget>
       var denominator = _maxTemp - _baseTemp;
       var tempRatio = numerator / denominator;
 
-      _width = _baseWidth + (tempRatio * extraWidth);
+      _width =
+          min(_baseWidth + extraWidth, _baseWidth + (tempRatio * extraWidth));
       setState(() {});
     });
     // _scaleAnimation =
@@ -121,44 +122,41 @@ class _TemperatureWidgetState extends State<TemperatureWidget>
                 origin: Offset(1, 1),
                 alignment: Alignment.centerLeft,
                 // scale: 1 + (_scaleAnimation.value * 0.1),
-                child: Padding(
-                    padding: const EdgeInsets.only(left: 20, top: 20),
-                    child: SizedBox(
-                        height: 40,
-                        child: Stack(children: [
-                          Opacity(
-                              opacity: 0.7,
-                              child: Image.asset("assets_new/ui/coin bar.png")),
-                          Padding(
-                              padding: const EdgeInsets.only(
-                                  top: 7, bottom: 10, left: 38),
-                              child: Container(
-                                height: 30,
-                                width: _width,
-                                decoration: BoxDecoration(
-                                    color: Color.lerp(
-                                        Colors.greenAccent.shade700,
-                                        Colors.deepOrange.shade400, //0.0)
-                                        ((_temperature +
-                                                    (_temperatureController
-                                                            .value *
-                                                        _tempDelta)) -
-                                                _baseTemp) /
-                                            (_maxTemp - _baseTemp))),
-                              )),
-                          Padding(
-                              padding: const EdgeInsets.only(left: 70, top: 8),
-                              child: Row(
-                                  mainAxisAlignment: MainAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                        "${(_temperature + (_temperatureController.value * _tempDelta)).toStringAsFixed(1)}°C ",
-                                        style: const TextStyle(
-                                            fontFamily: "Lilita",
-                                            fontSize: 14,
-                                            fontWeight: FontWeight.w100,
-                                            color: Colors.white)),
-                                  ]))
-                        ]))))));
+                child: SizedBox(
+                    height: 40,
+                    child: Stack(children: [
+                      Opacity(
+                          opacity: 0.7,
+                          child: Image.asset("assets_new/ui/coin bar.png")),
+                      Padding(
+                          padding: const EdgeInsets.only(
+                              top: 7, bottom: 10, left: 38),
+                          child: Container(
+                            height: 30,
+                            width: _width,
+                            decoration: BoxDecoration(
+                                color: Color.lerp(
+                                    Colors.greenAccent.shade700,
+                                    Colors.deepOrange.shade400, //0.0)
+                                    ((_temperature +
+                                                (_temperatureController.value *
+                                                    _tempDelta)) -
+                                            _baseTemp) /
+                                        (_maxTemp - _baseTemp))),
+                          )),
+                      Padding(
+                          padding: const EdgeInsets.only(left: 70, top: 8),
+                          child: Row(
+                              mainAxisAlignment: MainAxisAlignment.start,
+                              children: [
+                                Text(
+                                    "${(_temperature + (_temperatureController.value * _tempDelta)).toStringAsFixed(1)}°C ",
+                                    style: const TextStyle(
+                                        fontFamily: "Lilita",
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w100,
+                                        color: Colors.white)),
+                              ]))
+                    ])))));
   }
 }

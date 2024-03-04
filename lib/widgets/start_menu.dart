@@ -13,56 +13,59 @@ class StartMenu extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Center(
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
-      const Align(
-          alignment: Alignment.center,
-          child: StrokedText(
+        child: Column(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+          const StrokedText(
             text: "ESCAPE FROM HEAT ISLAND",
             fontSize: 48,
-          )),
-      SizedBox(
-          height: 350,
-          width: 250,
-          child: Stack(children: [
-            Image.asset("assets_new/ui/empty small panel.png"),
-            const Align(
-                alignment: Alignment.topCenter,
-                child: Padding(
-                  padding: EdgeInsets.only(top: 10),
-                  child: StrokedText(text: "MENU"),
-                )),
-            Padding(
-                padding:
-                    const EdgeInsets.symmetric(vertical: 60, horizontal: 30),
-                child: Column(children: [
-                  Align(
-                      alignment: Alignment.center,
-                      child: GestureDetector(
-                          onTap: () {
-                            viewModel.start();
-                          },
-                          child: Stack(children: [
-                            Image.asset("assets_new/ui/empty button.png"),
-                            const Padding(
-                                padding: EdgeInsets.only(top: 5),
-                                child:
-                                    Center(child: StrokedText(text: "START")))
-                          ]))),
-                  const SizedBox(height: 12.0),
-                  Align(
-                      alignment: Alignment.center,
-                      child: GestureDetector(
-                          onTap: () {
-                            exit(0);
-                          },
-                          child: Stack(children: [
-                            Image.asset("assets_new/ui/empty button.png"),
-                            const Padding(
-                                padding: EdgeInsets.only(top: 5),
-                                child: Center(child: StrokedText(text: "EXIT")))
-                          ])))
-                ]))
-          ])),
-    ]));
+          ),
+          if (viewModel.state.value == GameState.GameOver)
+            StrokedText(text: "GAME OVER"),
+          SizedBox(
+              width: 250,
+              child: Stack(children: [
+                Image.asset("assets_new/ui/empty small panel.png"),
+                const Align(
+                    alignment: Alignment.topCenter,
+                    child: Padding(
+                      padding: EdgeInsets.only(top: 10),
+                      child: StrokedText(text: "MENU"),
+                    )),
+                Padding(
+                    padding: const EdgeInsets.symmetric(
+                        vertical: 60, horizontal: 30),
+                    child: Column(children: [
+                      Align(
+                          alignment: Alignment.center,
+                          child: GestureDetector(
+                              onTap: () {
+                                viewModel.start();
+                              },
+                              child: Stack(children: [
+                                Image.asset("assets_new/ui/empty button.png"),
+                                const Padding(
+                                    padding: EdgeInsets.only(top: 5),
+                                    child: Center(
+                                        child: StrokedText(text: "START")))
+                              ]))),
+                      const SizedBox(height: 12.0),
+                      Align(
+                          alignment: Alignment.center,
+                          child: GestureDetector(
+                              onTap: () {
+                                exit(0);
+                              },
+                              child: Stack(children: [
+                                Image.asset("assets_new/ui/empty button.png"),
+                                const Padding(
+                                    padding: EdgeInsets.only(top: 5),
+                                    child: Center(
+                                        child: StrokedText(text: "EXIT")))
+                              ])))
+                    ]))
+              ])),
+        ]));
   }
 }

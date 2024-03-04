@@ -1,9 +1,12 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'dart:math';
 import 'dart:typed_data';
+import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter_filament/camera/camera_orientation.dart';
 import 'package:flutter_filament/entities/entity_transform_controller.dart';
+import 'package:untitled_flutter_game_project/audio_service.dart';
 import 'package:untitled_flutter_game_project/game.dart';
 import 'package:vector_math/vector_math_64.dart' as v;
 import 'package:flutter/cupertino.dart';
@@ -14,7 +17,7 @@ import 'package:flutter/material.dart' as m;
 import 'package:flutter_filament/filament_controller.dart';
 import 'package:flutter_filament/filament_controller_ffi.dart';
 
-enum GameState { Loading, Loaded, Play, Pause }
+enum GameState { Loading, Loaded, Play, GameOver, Pause }
 
 class Cell {
   bool hasFootpath = false;
@@ -37,6 +40,7 @@ class Footpath {
 }
 
 class Character {
+  bool passedOut = false;
   late v.Vector3 position;
   late CharacterType characterType;
   bool hasLeftBaby = false;
@@ -83,21 +87,24 @@ class ContextMenu {
   ContextMenu(this.offset, this.labels, this._callbacks);
 }
 
+typedef PickResult = ({FilamentEntity entity, double x, double y});
+
 class GameViewModel {
   final _footpaths = <Footpath>[];
   final _roads = <Road>[];
-
-  final roadLengthInTiles = 30;
+  final _buildings = <Building>[];
 
   bool enableCameraMovement = false;
 
   final cameraOrientation = CameraOrientation();
-  final buildings = <FilamentEntity>[];
 
   final temperature = ValueNotifier<double>(25.0);
+  final gameOverTemperature = 40.0;
 
   final _vehicles = <Vehicle>[];
   final barriers = <FilamentEntity>{};
+  final _barrierCollisions = <FilamentEntity>{};
+  final _rearCollisions = <FilamentEntity>{};
 
   final numBuildings = ValueNotifier<int>(0);
 
@@ -105,7 +112,7 @@ class GameViewModel {
 
   final state = ValueNotifier<GameState>(GameState.Loading);
 
-  // final _audioService = AudioService();
+  final _audioService = AudioService();
 
   final _filamentController = FilamentControllerFFI();
   FilamentController get filamentController => _filamentController;
@@ -129,83 +136,91 @@ class GameViewModel {
 
   EntityTransformController? cameraController;
 
+  void _onPickResult(PickResult event) async {
+    if (!_canOpenTileMenu) {
+      return;
+    }
+    var entity = event.entity;
+    var x = event.x;
+    var y = event.y;
+
+    if (_footpaths
+        .where((f) => f.instance == entity || f.children.contains(entity))
+        .isNotEmpty) {
+      final footpath = _footpaths.firstWhere(
+          (f) => f.instance == entity || f.children.contains(entity));
+      if (!footpath.hasTree) {
+        if (selectedTile == null) {
+          var selectedTileEntity = await _filamentController.loadGlbFromBuffer(
+              "$_prefix/assets_new/selected.glb",
+              cache: true);
+          selectedTile = (selectedTileEntity, footpath.position);
+        }
+        selectedTile!.$2.x = footpath.position.x;
+        selectedTile!.$2.y = footpath.position.y;
+        selectedTile!.$2.z = footpath.position.z;
+
+        await _filamentController.setParent(selectedTile!.$1, _root);
+        await _filamentController.setPosition(selectedTile!.$1,
+            footpath.position.x, footpath.position.y, footpath.position.z);
+
+        if (_canOpenTileMenu) {
+          contextMenu.value = ContextMenu(Offset(x, y), [
+            "Plant Tree"
+          ], [
+            () async {
+              await plantTree();
+            }
+          ]);
+        }
+      }
+    } else if (_roads
+        .where((f) => f.instance == entity || f.children.contains(entity))
+        .isNotEmpty) {
+      final road = _roads.firstWhere(
+          (f) => f.instance == entity || f.children.contains(entity));
+      if (!road.hasBarrier) {
+        var position = road.position;
+        if (selectedTile == null) {
+          var selectedTileEntity = await _filamentController.loadGlbFromBuffer(
+              "$_prefix/assets_new/selected.glb",
+              cache: true);
+          selectedTile = (selectedTileEntity, position);
+        }
+        selectedTile!.$2.x = position.x;
+        selectedTile!.$2.y = position.y;
+        selectedTile!.$2.z = position.z;
+
+        await _filamentController.setParent(selectedTile!.$1, _root);
+        await _filamentController.setPosition(
+            selectedTile!.$1, position.x, position.y, position.z);
+
+        if (_canOpenTileMenu) {
+          contextMenu.value = ContextMenu(Offset(event.x, event.y), [
+            "Erect Barrier"
+          ], [
+            () async {
+              await erectBarrier();
+            }
+          ]);
+        }
+      }
+    }
+  }
+
   Future initialize(TickerProvider tickerProvider) async {
     if (_initialized.isCompleted) {
       throw Exception();
     }
 
-    cameraOrientation.position.x = 0.5;
-    cameraOrientation.position.y = 2;
-    cameraOrientation.position.z = roadLengthInTiles / 2;
-    cameraOrientation.rotationX = -pi / 6;
-    cameraOrientation.rotationY = -pi / 2;
-    cameraOrientation.rotationZ = 0;
+    await _audioService.play("assets_new/music_loop.wav",
+        source: AudioSource.Asset, loop: true);
 
-    _filamentController.pickResult.listen((event) async {
-      var entity = event.entity;
-
-      if (_footpaths
-          .where((f) => f.instance == entity || f.children.contains(entity))
-          .isNotEmpty) {
-        final footpath = _footpaths.firstWhere(
-            (f) => f.instance == entity || f.children.contains(entity));
-        if (!footpath.hasTree) {
-          if (selectedTile != null) {
-            await _filamentController.removeEntity(selectedTile!.$1);
-          }
-          var selectedTileEntity = await _filamentController.loadGlbFromBuffer(
-              "$_prefix/assets_new/selected.glb",
-              cache: true);
-          await _filamentController.setPosition(selectedTileEntity,
-              footpath.position.x, footpath.position.y, footpath.position.z);
-          selectedTile = (selectedTileEntity, footpath.position);
-          if (_canOpenTileMenu) {
-            contextMenu.value = ContextMenu(Offset(event.x, event.y), [
-              "Plant Tree"
-            ], [
-              () async {
-                await plantTree();
-              }
-            ]);
-          }
-        }
-      } else if (_roads
-          .where((f) => f.instance == entity || f.children.contains(entity))
-          .isNotEmpty) {
-        final road = _roads.firstWhere(
-            (f) => f.instance == entity || f.children.contains(entity));
-        if (!road.hasBarrier) {
-          var position = road.position;
-          if (selectedTile != null) {
-            await _filamentController.removeEntity(selectedTile!.$1);
-          }
-          var selectedTileEntity = await _filamentController.loadGlbFromBuffer(
-              "$_prefix/assets_new/selected.glb",
-              cache: true);
-          await _filamentController.setPosition(
-              selectedTileEntity, position.x, position.y, position.z);
-          selectedTile = (selectedTileEntity, position);
-          if (_canOpenTileMenu) {
-            contextMenu.value = ContextMenu(Offset(event.x, event.y), [
-              "Erect Barrier"
-            ], [
-              () async {
-                await erectBarrier();
-              }
-            ]);
-          }
-        }
-      }
-    });
+    _filamentController.pickResult.listen(_onPickResult);
 
     this.tickerProvider = tickerProvider;
     // await _audioService.initialize();
     await _filamentController.createViewer();
-    // await _filamentController.setCameraFocusDistance(0.3);
-
-    // cameraController = await _filamentController.control(
-    //     await _filamentController.getMainCamera(),
-    //     translationSpeed: 10);
 
     lightOptions = LightOptions(
         iblPath: "$_prefix/assets_new/ibl/ibl_ibl.ktx",
@@ -246,10 +261,6 @@ class GameViewModel {
         lightOptions.directionalDirection.z,
         lightOptions.directionalCastShadows);
 
-    // await _filamentController.setCameraPosition(cameraOrientation.position.x,
-    //     cameraOrientation.position.y, cameraOrientation.position.z);
-    // var rotation = cameraOrientation.compose();
-    // await _filamentController.setCameraRotation(rotation);
     await _filamentController.setCameraManipulatorOptions(
         zoomSpeed: 5, mode: ManipulatorMode.ORBIT);
     await _filamentController.setToneMapping(ToneMapper.LINEAR);
@@ -259,11 +270,27 @@ class GameViewModel {
   }
 
   late FilamentEntity? _intro;
+  Timer? _introTimer;
 
   Future playIntroAnimation() async {
+    _buildingLoop?.cancel();
+    for (final building in _buildings) {
+      building.controller.reset();
+    }
+
     await stopCameraLandscapeAnimation();
+    int buildingNum = 0;
+    _introTimer?.cancel();
+    _introTimer = Timer.periodic(const Duration(seconds: 2), (timer) {
+      if (buildingNum < _buildings.length) {
+        _buildings[buildingNum].controller.forward();
+        buildingNum++;
+      }
+    });
+
     await _filamentController.playAnimationByName(_intro!, "CameraIntro",
         replaceActive: false);
+
     await _filamentController.playAnimationByName(_intro!, "EmptyIntro",
         replaceActive: false);
     await _filamentController.playAnimationByName(_intro!, "CharacterIntro",
@@ -273,11 +300,11 @@ class GameViewModel {
   Future _loadIntro() async {
     _intro = await _filamentController
         .loadGlbFromBuffer("$_prefix/assets_new/intro.glb");
-    await _filamentController.setPosition(_intro!, 4, 0.19, 8);
+    await _filamentController.addAnimationComponent(_intro!);
+    await _filamentController.setParent(_intro!, _root);
+    await _filamentController.setPosition(
+        _intro!, 4.0 - _gridWidth, 0.19, 8.0 - _gridDepth);
     await _filamentController.setCamera(_intro!, null);
-    // var camera = await _filamentController.getChildEntity(_intro!, "Camera");
-    // await _filamentController.setPosition(camera, 0, 0.19, 0);
-    // await _filamentController.setRotation(camera!, 0, 0, 1, 0);
   }
 
   Timer? _cameraLandscapeAnimation;
@@ -290,12 +317,12 @@ class GameViewModel {
     stopCameraLandscapeAnimation();
     var camera = await _filamentController.getChildEntity(_intro!, "Camera");
     double xOffset = 0.0;
-    int buildingNum = 6;
+    int buildingNum = 2;
     _cameraLandscapeAnimation =
-        Timer.periodic(const Duration(milliseconds: 16), (timer) {
+        Timer.periodic(const Duration(microseconds: 16670), (timer) {
       xOffset += 0.007;
-      if (xOffset >= 1.0) {
-        _scales[buildings[buildingNum]]!.forward();
+      if (xOffset >= 1.0 && buildingNum <= _buildings.length - 1) {
+        _buildings[buildingNum].controller.forward();
         xOffset = 0;
         buildingNum++;
       }
@@ -324,7 +351,7 @@ class GameViewModel {
   Future _loadVehicles() async {
     for (int i = 0; i < _gridWidth; i++) {
       var vehicleRoll = _rnd.nextDouble();
-      if (vehicleRoll < 0.5) {
+      if (vehicleRoll < 0.75) {
         continue;
       }
 
@@ -332,17 +359,21 @@ class GameViewModel {
 
       var vehicle = Vehicle();
       _vehicles.add(vehicle);
-      vehicle.position = v.Vector3(i * 2, 0.17, 12);
+      vehicle.position =
+          v.Vector3((i * 2.0) - _gridWidth, 0.17, 12.0 - _gridDepth);
       vehicle.type = type;
       vehicle.speed = 0.01 + _rnd.nextDouble() * 0.01;
       vehicle.instance =
           await _filamentController.loadGlb("$_prefix/assets_new/$type");
+      await _filamentController.setParent(vehicle.instance!, _root);
       vehicle.hitboxFront = await _filamentController.loadGlbFromBuffer(
           "$_prefix/assets_new/car_hitbox_front.glb",
           cache: true);
+
       vehicle.hitboxBack = await _filamentController.loadGlbFromBuffer(
           "$_prefix/assets_new/car_hitbox_back.glb",
           cache: true);
+
       await _filamentController.setParent(
           vehicle.hitboxFront!, vehicle.instance!);
       await _filamentController.setParent(
@@ -355,23 +386,37 @@ class GameViewModel {
       await _filamentController.hide(vehicle.hitboxFront!, null);
       await _filamentController.hide(vehicle.hitboxBack!, null);
 
-      Timer? _timer;
+      var hitboxFrontChild1 = await _filamentController.getChildEntity(
+          vehicle.hitboxFront!, "hitbox_front");
 
       await _filamentController.addCollisionComponent(vehicle.hitboxFront!,
-          callback: (e1, e2) {
+          callback: (e1, e2) async {
         vehicle.paused = true;
-        _timer?.cancel();
-        _timer = Timer(Duration(milliseconds: 1000), () async {
-          if (!barriers.contains(e2)) {
+
+        var _timer =
+            Timer(Duration(milliseconds: (1000 * _rnd.nextDouble()).toInt()),
+                () async {
+          if (!_barrierCollisions.contains(vehicle.hitboxFront) &&
+              !_barrierCollisions.contains(hitboxFrontChild1) &&
+              !_barrierCollisions.contains(e1) &&
+              !_barrierCollisions.contains(e2) &&
+              !_rearCollisions.contains(e1) &&
+              !_rearCollisions.contains(e2)) {
+            // await _filamentController.queuePositionUpdate(
+            //     vehicle.instance!, 0, 0, -0.01,
+            //     relative: true);
             vehicle.paused = false;
           }
         });
       });
       await _filamentController.addCollisionComponent(vehicle.hitboxBack!,
           callback: (e1, e2) {
-        Future.delayed(Duration(milliseconds: 900)).then((value) async {
-          await _filamentController.testCollisions(vehicle.hitboxBack!);
-        });
+        // _rearCollisions.add(e1);
+        // _rearCollisions.add(e2);
+        // vehicle.paused = false;
+        // Future.delayed(Duration(milliseconds: 100)).then((value) async {
+        //   await _filamentController.testCollisions(vehicle.hitboxBack!);
+        // });
       });
     }
   }
@@ -385,7 +430,7 @@ class GameViewModel {
   late FilamentEntity _roadAsset;
 
   int _gridWidth = 21;
-  int _gridDepth = 21;
+  int _gridDepth = 11;
   int cellDim = 2;
 
   // initialize to a 20x20 grid
@@ -403,13 +448,16 @@ class GameViewModel {
   // camera starts looking down at (3,3)
   final _grid = <Cell>[];
   Future _initializeGrid() async {
-    for (int x = 0; x < _gridWidth; x++) {
-      for (int y = 0; y < _gridDepth; y++) {
-        var position = v.Vector3(x * 2, 0, y * 2);
+    _grid.clear();
+
+    for (int y = 0; y < _gridDepth; y++) {
+      for (int x = 0; x < _gridWidth; x++) {
+        var position =
+            v.Vector3((x * 2.0) - _gridWidth, 0, (y * 2.0) - _gridDepth);
         var cell = Cell(position);
         cell.hasFootpath = true;
         cell.hasRoad = (y - 1) % 5 == 0;
-        if ((y - 3) % 5 == 0) {
+        if (y == 2 || y == 8) {
           var bldType = _rnd.nextInt(6);
           cell.buildingType = "ABCDEF".substring(bldType, bldType + 1);
         }
@@ -418,7 +466,38 @@ class GameViewModel {
     }
   }
 
+  late FilamentEntity _root;
+  final rootRotation = ValueNotifier<double>(0);
+
+  void rotateRoot(double rotation) async {
+    rootRotation.value = rotation;
+    await _filamentController.setRotationQuat(
+        _root, v.Quaternion.axisAngle(v.Vector3(0, 1, 0), rotation));
+  }
+
   Future _loadInstances() async {
+    _root = await _filamentController.createGeometry([
+      -1,
+      0,
+      -1,
+      -1,
+      0,
+      1,
+      1,
+      0,
+      1,
+      1,
+      0,
+      -1,
+    ], [
+      0,
+      1,
+      2,
+      2,
+      3,
+      0
+    ], null);
+
     var numFootpaths = _gridWidth * _gridDepth;
     _footpathAsset = await _filamentController.loadGlb(
         "$_prefix/assets_new/footpath.glb",
@@ -426,6 +505,7 @@ class GameViewModel {
     _footpathInstances
         .addAll(await _filamentController.getInstances(_footpathAsset!));
     for (final instance in _footpathInstances!) {
+      await _filamentController.setParent(instance, _root);
       await _filamentController.hide(instance, null);
     }
 
@@ -459,9 +539,10 @@ class GameViewModel {
     List<int> buildingOffsets = "ABCDEFG".split("").map((_) => 0).toList();
     for (int x = 0; x < _gridWidth; x++) {
       for (int y = 0; y < _gridDepth; y++) {
-        var cell = _grid[(y * _gridWidth) + x];
+        var cell = _grid[(x * _gridDepth) + y];
         if (cell.hasRoad) {
           var entity = _roadInstances[roadOffset];
+          await _filamentController.setParent(entity, _root);
           await _filamentController.setPosition(
               entity, cell.position.x, 0, cell.position.z);
           await _filamentController.setRotationQuat(
@@ -479,13 +560,28 @@ class GameViewModel {
           var buildingTypeIndex = "ABCDEFG".indexOf(cell.buildingType!);
           var offset = buildingOffsets[buildingTypeIndex];
           var entity = _buildingInstances[buildingTypeIndex][offset];
+          var bld = Building();
+          bld.position = cell.position.clone();
           await _filamentController.setPosition(
-              entity, cell.position.x, 0, cell.position.z);
+              entity, bld.position.x, 0, bld.position.z);
           await _filamentController.reveal(entity, null);
           buildingOffsets[buildingTypeIndex]++;
+
+          bld.instance = entity;
+          await _filamentController.setParent(bld.instance!, _root);
+
+          bld.controller = AnimationController(
+              vsync: tickerProvider, duration: Duration(milliseconds: 250));
+          var tween =
+              bld.controller.drive(CurveTween(curve: Curves.easeInOutBack));
+          bld.controller.addListener(() async {
+            await _filamentController.setScale(bld.instance!, tween.value);
+          });
+          await _filamentController.setScale(bld.instance!, 0);
+          _buildings.add(bld);
         }
 
-        if (!cell.hasRoad && cell.buildingType == null && cell.hasFootpath) {
+        if (!cell.hasRoad && cell.hasFootpath) {
           var entity = _footpathInstances[footpathOffset];
           await _filamentController.setPosition(
               entity, cell.position.x, 0, cell.position.z);
@@ -507,6 +603,7 @@ class GameViewModel {
   }
 
   final _characters = <Character>[];
+  final numPassedOut = ValueNotifier<int>(0);
 
   // we only put characters on the footpath near the main road (i.e. at (0,4), (1,4), etc)
   Future _loadCharacters() async {
@@ -515,7 +612,8 @@ class GameViewModel {
         continue;
       }
       var character = Character();
-      character.position = v.Vector3(i * 2, 0, 8);
+      character.position =
+          v.Vector3((i * 2.0) - _gridWidth, 0.16, 8.0 - _gridDepth);
       double charRoll = _rnd.nextDouble();
 
       character.characterType = charRoll > 0.66
@@ -527,7 +625,6 @@ class GameViewModel {
       character.hasLeftBaby = _rnd.nextDouble() > 0.75;
       character.hasRightBaby = _rnd.nextDouble() > 0.75;
       character.speed = 0.001 + _rnd.nextDouble() * 0.005;
-
       _characters.add(character);
     }
 
@@ -554,8 +651,10 @@ class GameViewModel {
 
       for (final char in ofType) {
         char.instance = instanceIterator.current;
+        await _filamentController.addAnimationComponent(char.instance!);
+        await _filamentController.setParent(char.instance!, _root);
         await _filamentController.setPosition(
-            char.instance!, char.position.x, 0.16, char.position.z);
+            char.instance!, char.position.x, char.position.y, char.position.z);
         await _filamentController.setRotationQuat(char.instance!, rotation);
 
         instanceIterator.moveNext();
@@ -577,6 +676,22 @@ class GameViewModel {
     }
   }
 
+  void _onTemperatureUpdate() {
+    if (numPassedOut.value == _characters.length) {
+      state.value = GameState.GameOver;
+    }
+  }
+
+  void _onGameStateUpdate() {
+    _canOpenTileMenu = false;
+
+    if (state.value == GameState.GameOver) {
+      _crowdLoop?.cancel();
+      _vehicleLoop?.cancel();
+      _buildingLoop?.cancel();
+    }
+  }
+
   Future _initializeGameState() async {
     await _initializeGrid();
     await _loadInstances();
@@ -586,39 +701,46 @@ class GameViewModel {
     await _loadVehicles();
 
     state.value = GameState.Loaded;
+    temperature.removeListener(_onTemperatureUpdate);
+    temperature.addListener(_onTemperatureUpdate);
+    state.removeListener(_onGameStateUpdate);
+    state.addListener(_onGameStateUpdate);
   }
 
-  late Timer _gameLoop;
-  late Timer _crowdLoop;
-  late Timer _vehicleLoop;
+  Timer? _crowdLoop;
+  Timer? _vehicleLoop;
 
-  void startCrowdMotion() {
+  Future startCrowdMotion() async {
     for (final char in _characters) {
-      Future.delayed(Duration(milliseconds: (_rnd.nextDouble() * 1000).toInt()))
-          .then((value) {
-        _filamentController.playAnimationByName(char.instance!, "Walk",
+      Future.delayed(Duration(milliseconds: (100 * _rnd.nextDouble()).toInt()))
+          .then((value) async {
+        await _filamentController.playAnimationByName(char.instance!, "Walk",
             loop: true);
         if (char.leftBaby != null) {
-          _filamentController.playAnimationByName(char.leftBaby!, "Walk",
+          await _filamentController.playAnimationByName(char.leftBaby!, "Walk",
               loop: true);
         }
         if (char.rightBaby != null) {
-          _filamentController.playAnimationByName(char.rightBaby!, "Walk",
+          await _filamentController.playAnimationByName(char.rightBaby!, "Walk",
               loop: true);
         }
       });
     }
+
     _crowdLoop =
-        Timer.periodic(const Duration(milliseconds: 20), (timer) async {
+        Timer.periodic(const Duration(microseconds: 16670), (timer) async {
       for (final char in _characters) {
+        if (char.passedOut) {
+          continue;
+        }
         char.position.x += char.speed;
 
-        if (char.position.x > _gridWidth * 2) {
-          char.position.x = 0;
-          _filamentController.queuePositionUpdate(
-              char.instance!, char.position.x, 0, char.position.z);
+        if (char.position.x > _gridWidth) {
+          char.position.x = -_gridWidth.toDouble();
+          await _filamentController.setPosition(char.instance!, char.position.x,
+              char.position.y, char.position.z);
         } else {
-          _filamentController.queuePositionUpdate(
+          await _filamentController.queuePositionUpdate(
               char.instance!, 0, 0, char.speed,
               relative: true);
         }
@@ -634,47 +756,81 @@ class GameViewModel {
 
   Timer? _buildingLoop;
   void startBuildingLoop() {
+    _introTimer?.cancel();
     _buildingLoop?.cancel();
-    Timer.periodic(Duration(seconds: 2), (timer) {
-      var idx = _rnd.nextInt(buildings.length);
-      // _scales[buildings[idx]]!.forward();
+    _buildingLoop = Timer.periodic(const Duration(milliseconds: 1600), (timer) {
+      var idx = _rnd.nextInt(_buildings.length);
+      _buildings[idx].controller.forward();
+      temperature.value += 1;
+      _checkCharacters();
     });
   }
 
-  void startVehicleMotion() {
-    _vehicleLoop = Timer.periodic(Duration(milliseconds: 16), (timer) async {
+  Future _checkCharacters() async {
+    if (temperature.value > 35) {
+      for (final character in _characters) {
+        if (!character.passedOut && _rnd.nextDouble() > 0.75) {
+          character.passedOut = true;
+          _audioService.play("assets_new/passout.wav",
+              source: AudioSource.Asset);
+          numPassedOut.value++;
+          await _filamentController.stopAnimationByName(
+              character.instance!, "Walk");
+          await _filamentController.playAnimationByName(
+              character.instance!, "Passout",
+              replaceActive: true);
+        }
+      }
+    }
+  }
+
+  Future startVehicleMotion() async {
+    _vehicleLoop?.cancel();
+    _vehicleLoop = Timer.periodic(Duration(microseconds: 16670), (timer) async {
       for (final barrier in barriers) {
         await _filamentController.testCollisions(barrier);
       }
-
       for (final vehicle in _vehicles) {
-        // await _filamentController.testCollisions(vehicle.hitboxFront!);
+        await _filamentController.testCollisions(vehicle.hitboxBack!);
+        if (vehicle.paused) {
+          continue;
+        }
+        await _filamentController.testCollisions(vehicle.hitboxFront!);
 
-        if (!vehicle.paused) {
-          vehicle.position.x += vehicle.speed;
+        vehicle.position.x += vehicle.speed;
 
-          if (vehicle.position.x > _gridWidth * 2) {
-            vehicle.position.x = 0;
-            print(vehicle.position.x);
-            _filamentController.queuePositionUpdate(vehicle.instance!,
+        if (vehicle.position.x > (_gridWidth - 2.0)) {
+          vehicle.paused = true;
+          Future.delayed(
+                  Duration(milliseconds: (1000 * _rnd.nextDouble()).toInt()))
+              .then((_) async {
+            vehicle.position.x = -_rnd.nextDouble() - _gridWidth;
+            await _filamentController.setPosition(vehicle.instance!,
                 vehicle.position.x, vehicle.position.y, vehicle.position.z);
-          } else {
-            _filamentController.queuePositionUpdate(
-                vehicle.instance!, 0, 0, vehicle.speed,
-                relative: true);
-          }
+            vehicle.paused = false;
+          });
+        } else {
+          _filamentController.queuePositionUpdate(
+              vehicle.instance!, 0, 0, vehicle.speed,
+              relative: true);
         }
       }
     });
   }
 
+  int get numCharacters => _characters.length;
+
   void start() {
-    // playCameraLandscapeAnimation();
+    _introTimer?.cancel();
+    for (final char in _characters) {
+      char.passedOut = false;
+    }
+    numPassedOut.value = 0;
+    temperature.value = 25.0;
     state.value = GameState.Play;
   }
 
   void pause() {
-    _gameLoop.cancel();
     state.value = GameState.Pause;
   }
 
@@ -697,96 +853,116 @@ class GameViewModel {
     var idx = (_rnd.nextDouble() * 4).toInt();
     var char = "ABCDE".substring(idx, idx + 1);
     var position = selectedTile!.$2;
+    _audioService.play("assets_new/swipe.wav", source: AudioSource.Asset);
     var tree = await _filamentController
         .loadGlbFromBuffer("$_prefix/assets_new/tree_${char}.glb", cache: true);
+
+    await _filamentController.setParent(tree, _root);
     await _filamentController.setPosition(tree, position.x - 0.75, position.y,
         position.z + (_rnd.nextDouble() > 0.5 ? 0.75 : -0.75));
     var controller = AnimationController(
         vsync: tickerProvider, duration: const Duration(milliseconds: 100));
-    // _scales[tree] = controller;
     controller.addListener(() async {
       await _filamentController.setScale(tree, controller.value * 2.0);
     });
     controller.addStatusListener((status) {
       if (status == AnimationStatus.completed) {
         controller.dispose();
-        // _scales.remove(tree);
         temperature.value = max(25, temperature.value - 1.0);
       }
     });
+
     controller.forward();
   }
 
   late Matrix4 _cameraModelMatrix;
 
-  Future moveCamera({double x = 0.0, double z = 0.0}) async {
+  Future moveCamera(
+      {double x = 0.0,
+      double y = 0.0,
+      double z = 0.0,
+      bool modelspace = false}) async {
+    // var camera = await _filamentController.getMainCamera();
+    // _filamentController.queuePositionUpdate(camera, x, y, z, relative: true);
     var trans = _cameraModelMatrix.getTranslation();
 
-    if (trans.z > (roadLengthInTiles + 5.0) && x > 0) {
-      return;
-    } else if (trans.z < -(roadLengthInTiles / 2) && x < 0) {
-      return;
-    }
+    if (modelspace) {
+      var rot = _cameraModelMatrix.getRotation();
+      var rotInverse = v.Matrix3.identity();
+      rotInverse.copyInverse(rot);
 
-    if (trans.x > -0.5 && z < 0) {
-      return;
-    } else if (trans.x < -20.0 && z > 0) {
-      return;
+      trans = rotInverse * trans;
+
+      trans.z -= z;
+      // trans.z = min(69, max(trans.z - z, 16.5));
+      trans = rot * trans;
+    } else {
+      trans.x = min(max(trans.x + x, -30), 0);
+
+      trans.z = min(13.0, max(trans.z + z, -13.7));
     }
-    _cameraModelMatrix.translate(x, 0.0, z);
+    _cameraModelMatrix.setTranslation(trans);
     await _filamentController.setCameraModelMatrix(_cameraModelMatrix.storage);
+  }
+
+  Future setCameraToGameStart() async {
+    _cameraLandscapeAnimation?.cancel();
+    var animations = await _filamentController.getAnimationNames(_intro!);
+    var animIdx = animations.indexOf("CameraReturn");
+    var cameraReturnLength =
+        await _filamentController.getAnimationDuration(_intro!, animIdx);
+    await _filamentController.playAnimation(_intro!, animIdx,
+        replaceActive: true);
+    await Future.delayed(
+        Duration(milliseconds: (cameraReturnLength * 1000).toInt() + 1));
+    _cameraModelMatrix = await _filamentController.getCameraModelMatrix();
+
+    await _filamentController.setMainCamera();
+    await _filamentController.setCameraModelMatrix(_cameraModelMatrix.storage);
+    enableCameraMovement = true;
+    await _filamentController.hide(_intro!, "Bear");
   }
 
   bool introBarrierErected = false;
   Future erectBarrier() async {
-    if (_intro != null) {
-      introBarrierErected = true;
-      Future.delayed(const Duration(milliseconds: 500)).then((_) async {
-        await Future.delayed(const Duration(seconds: 3));
-        await _filamentController.playAnimationByName(_intro!, "CameraReturn");
-        await Future.delayed(const Duration(milliseconds: 500));
-        _cameraModelMatrix = await _filamentController.getCameraModelMatrix();
-
-        var newModelMatrix =
-            Matrix4.translation(_cameraModelMatrix.getTranslation());
-        // var rot = _cameraModelMatrix.getRotation();
-        var rot = v.Quaternion.axisAngle(v.Vector3(0, 1, 0), -pi / 2) *
-            v.Quaternion.axisAngle(
-                v.Vector3(1, 0, 0), (2 * pi) * (-20.8 / 360));
-
-        newModelMatrix.rotate(rot.axis, rot.radians);
-
-        _cameraModelMatrix = newModelMatrix;
-        await _filamentController.setMainCamera();
-        await _filamentController.setCameraModelMatrix(newModelMatrix.storage);
-        enableCameraMovement = true;
-      });
-    }
-
     closeContextMenu();
 
     var position = selectedTile!.$2;
     var barrier = await _filamentController
         .loadGlbFromBuffer("$_prefix/assets_new/barrier.glb", cache: true);
+    await _filamentController.setParent(barrier, _root);
     barriers.add(barrier);
     await _filamentController.setPosition(
         barrier, position.x, position.y, position.z);
-    // await _filamentController.setRotation(entity, rads, x, y, z)
+    await _filamentController.setRotationQuat(
+        barrier, v.Quaternion.axisAngle(v.Vector3(0, 1, 0), -pi / 2));
     var controller = AnimationController(
         vsync: tickerProvider, duration: const Duration(milliseconds: 100));
-    // _scales[barrier] = controller;
     controller.addListener(() async {
       await _filamentController.setScale(barrier, controller.value);
+      await _filamentController.setRotationQuat(
+          barrier, v.Quaternion.axisAngle(v.Vector3(0, 1, 0), -pi / 2));
     });
     controller.addStatusListener((status) {
       if (status == AnimationStatus.completed) {
         controller.dispose();
-        // _scales.remove(barrier);
       }
     });
     controller.forward();
-    await _filamentController.addCollisionComponent(barrier);
+    await _filamentController.addCollisionComponent(barrier,
+        callback: (e1, e2) {
+      _barrierCollisions.add(e2);
+      _barrierCollisions.add(e1);
+      print("BARRIER COLLISION");
+    });
     temperature.value = max(25, temperature.value - 1.0);
+
+    if (_intro != null) {
+      introBarrierErected = true;
+      await setCameraToGameStart();
+      await _filamentController.removeEntity(_intro!);
+      _intro = null;
+    }
   }
 
   bool _canOpenTileMenu = true;

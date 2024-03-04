@@ -11,28 +11,30 @@ class ContextMenuWidget extends StatefulWidget {
 
 class _TileMenuState extends State<ContextMenuWidget>
     with SingleTickerProviderStateMixin {
-  late AnimationController _scaleController;
+  // late AnimationController _scaleController;
   @override
   void initState() {
     super.initState();
-    _scaleController = AnimationController(
-        vsync: this, duration: const Duration(milliseconds: 250));
-    WidgetsBinding.instance.addPostFrameCallback((timeStamp) {
-      _scaleController.forward();
-    });
+    // _scaleController = AnimationController(
+    //     vsync: this, duration: const Duration(milliseconds: 50));
+    // WidgetsBinding.instance.addPostFrameCallback((timeStamp) {
+    //   _scaleController.forward();
+    // });
   }
 
   @override
   void dispose() {
     super.dispose();
-    _scaleController.dispose();
+    // _scaleController.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    return ScaleTransition(
-        scale: _scaleController,
-        child: Column(
+    return
+        // ScaleTransition(
+        //     scale: _scaleController,
+        //     child:
+        Column(
             children: widget.viewModel.contextMenu.value!.labels
                 .map((label) => MouseRegion(
                     cursor: SystemMouseCursors.click,
@@ -53,6 +55,8 @@ class _TileMenuState extends State<ContextMenuWidget>
                                     style: const TextStyle(
                                         fontFamily: "Lilita",
                                         color: Color(0xFF391f00))))))))
-                .toList()));
+                .toList()
+            // )
+            );
   }
 }
