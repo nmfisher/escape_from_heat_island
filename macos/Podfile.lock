@@ -52,7 +52,7 @@ EXTERNAL SOURCES:
 SPEC CHECKSUMS:
   audio_session: dea1f41890dbf1718f04a56f1d6150fd50039b72
   audioplayers_darwin: dcad41de4fbd0099cb3749f7ab3b0cb8f70b810c
-  flutter_filament: 294f45e2d5c2f3c92fb4e44799a3d40c91890fa9
+  flutter_filament: 435c3258bdd25f6b86c4d328355799c9698e73eb
   FlutterMacOS: 8f6f14fa908a6fb3fba0cd85dbd81ec4b251fb24
   just_audio: 9b67ca7b97c61cfc9784ea23cd8cc55eb226d489
   path_provider_foundation: 3784922295ac71e43754bd15e0653ccfd36a147c
