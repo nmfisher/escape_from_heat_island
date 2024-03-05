@@ -87,12 +87,12 @@ Plant trees as quickly as possible before all the residents faint from the heat!
       return Container();
     }
     return Container(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
         decoration: BoxDecoration(
             color: Colors.black54, borderRadius: BorderRadius.circular(20)),
         child: StrokedText(
           text: text[_step],
-          fontSize: 36,
+          fontSize: 32,
         ));
   }
 }
