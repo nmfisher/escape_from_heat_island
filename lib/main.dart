@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:ffi';
 import 'dart:io';
 import 'dart:math';
 
@@ -109,9 +110,9 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                               child: StrokedText(text: "LOADING"))),
                     if (state == GameState.Play)
                       Positioned(
-                          bottom: 50,
-                          left: 100,
-                          right: 100,
+                          top: 20,
+                          left: 175,
+                          right: 175,
                           child: IntroWidget(
                             viewModel: viewModel,
                           )),
@@ -167,6 +168,12 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                             behavior: HitTestBehavior.translucent,
                             onPointerDown: (event) {
                               viewModel.closeContextMenu();
+                            },
+                            onPointerPanZoomUpdate: (event) {
+                              if (viewModel.enableCameraMovement) {
+                                viewModel.moveCamera(
+                                    z: event.delta.dy / 10, modelspace: true);
+                              }
                             },
                             onPointerUp: (event) {
                               Future.delayed(Duration(milliseconds: 50))
