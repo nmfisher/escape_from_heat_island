@@ -5,6 +5,7 @@ import 'package:audio_session/audio_session.dart';
 import 'package:audioplayers/audioplayers.dart' as ap;
 import 'package:flutter/services.dart';
 import 'package:flutter_sound/flutter_sound.dart';
+import 'package:flutter_sound/public/flutter_sound_player.dart';
 import 'package:flutter_sound_platform_interface/flutter_sound_platform_interface.dart'
     as s;
 import 'package:just_audio/just_audio.dart' as ja;
@@ -127,12 +128,37 @@ class AudioService {
       bool loop = false,
       s.Codec codec = s.Codec.pcm16WAV}) async {
     Completer _completer = Completer();
+if(Platform.isWindows) {
+      ap.AudioCache.instance = ap.AudioCache(prefix: '');
+      
+      final _player = ap.AudioPlayer();
+          late StreamSubscription listener;
 
+      listener = _player.onPlayerStateChanged.listen((event) async {
+        if(event == ap.PlayerState.completed) {
+          if (loop) {
+            await _player.stop();
+            await _player.seek(Duration.zero);
+            _player.seek(Duration.zero);
+            _player.resume();
+          } else if (!_completer.isCompleted) {
+            _completer.complete();
+            listener.cancel();
+          }
+        }
+      });
+      _player.play(ap.AssetSource(path));
+      return Playing(
+          onCancel: () async {
+            await _player!.stop();
+          },
+          completed: _completer.future);
+}
     final _player = ja.AudioPlayer();
-    await _player.setVolume(0.25);
+    await _player.setVolume(1.0);
     await _player.setAudioSource(
         source == AudioSource.Asset
-            ? ja.AudioSource.asset(path)
+            ? ja.AudioSource.asset("asset:///$path")
             : ja.AudioSource.file(path),
         preload: true);
     late StreamSubscription listener;
@@ -142,10 +168,10 @@ class AudioService {
           await _player.stop();
           await _player.seek(Duration.zero);
           _player.play();
+        } else if (!_completer.isCompleted) {
+          _completer.complete();
+          listener.cancel();
         }
-      } else if (!_completer.isCompleted) {
-        _completer.complete();
-        listener.cancel();
       }
     });
     _player.play();
