@@ -114,7 +114,7 @@ class GameViewModel {
 
   final _audioService = AudioService();
 
-  final _filamentController = FilamentControllerFFI();
+  final _filamentController = FilamentControllerFFI();//uberArchivePath: "assets_new/unlit_opaque.uberz");
   FilamentController get filamentController => _filamentController;
 
   final ready = ValueNotifier<bool>(false);
@@ -221,6 +221,9 @@ class GameViewModel {
     this.tickerProvider = tickerProvider;
     // await _audioService.initialize();
     await _filamentController.createViewer();
+
+    await _filamentController.setFrameRate(Platform.isWindows ? 30 : 60);
+    await _filamentController.setPostProcessing(true);
 
     lightOptions = LightOptions(
         iblPath: "$_prefix/assets_new/ibl/ibl_ibl.ktx",
@@ -411,12 +414,12 @@ class GameViewModel {
       });
       await _filamentController.addCollisionComponent(vehicle.hitboxBack!,
           callback: (e1, e2) {
-        // _rearCollisions.add(e1);
-        // _rearCollisions.add(e2);
-        // vehicle.paused = false;
-        // Future.delayed(Duration(milliseconds: 100)).then((value) async {
-        //   await _filamentController.testCollisions(vehicle.hitboxBack!);
-        // });
+        _rearCollisions.add(e1);
+        _rearCollisions.add(e2);
+        vehicle.paused = false;
+        Future.delayed(Duration(milliseconds: 100)).then((value) async {
+          await _filamentController.testCollisions(vehicle.hitboxBack!);
+        });
       });
     }
   }
@@ -682,6 +685,7 @@ class GameViewModel {
     }
   }
 
+  
   void _onGameStateUpdate() {
     _canOpenTileMenu = false;
 
