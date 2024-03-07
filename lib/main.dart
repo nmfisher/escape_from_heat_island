@@ -36,7 +36,7 @@ class MyApp extends StatelessWidget {
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
         useMaterial3: true,
       ),
-      home: const MyHomePage(title: 'Untitled Flutter Game Project'),
+      home: const MyHomePage(title: 'Escape From Heat Island'),
     );
   }
 }
@@ -63,6 +63,19 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
     super.initState();
     WidgetsFlutterBinding.ensureInitialized();
 
+     ServicesBinding.instance.keyEventManager.keyMessageHandler = (keyMessage) {
+      if (keyMessage.rawEvent == null) {
+        return false;
+      }
+        var event = keyMessage.rawEvent!;
+        switch (event.logicalKey) {
+        case LogicalKeyboardKey.escape:
+            viewModel.pause();
+            break;
+        }
+        return true;
+     };
+
     if (Platform.isAndroid || Platform.isIOS) {
       SystemChrome.setPreferredOrientations([
         DeviceOrientation.landscapeRight,
@@ -81,7 +94,7 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
     viewModel.initialize(this).then((_) async {
       await windowManager.ensureInitialized();
       _loadingTimer!.cancel();
-      windowManager.setFullScreen(true);
+      // windowManager.setFullScreen(true);
       windowManager.setTitle("Escape From Heat Island!");
     });
   }
