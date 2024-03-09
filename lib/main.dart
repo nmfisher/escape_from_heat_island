@@ -36,7 +36,7 @@ class MyApp extends StatelessWidget {
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
         useMaterial3: true,
       ),
-      home: const MyHomePage(title: 'Untitled Flutter Game Project'),
+      home: const MyHomePage(title: 'Escape From Heat Island'),
     );
   }
 }
@@ -62,6 +62,19 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
   void initState() {
     super.initState();
     WidgetsFlutterBinding.ensureInitialized();
+
+    ServicesBinding.instance.keyEventManager.keyMessageHandler = (keyMessage) {
+      if (keyMessage.rawEvent == null) {
+        return false;
+      }
+      var event = keyMessage.rawEvent!;
+      switch (event.logicalKey) {
+        case LogicalKeyboardKey.escape:
+          viewModel.pause();
+          break;
+      }
+      return true;
+    };
 
     _loadingTimer = Timer.periodic(Duration(milliseconds: 1000), (timer) {
       if (_loadingOpacity == 1) {
