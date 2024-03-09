@@ -63,12 +63,6 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
     super.initState();
     WidgetsFlutterBinding.ensureInitialized();
 
-    if (Platform.isAndroid || Platform.isIOS) {
-      SystemChrome.setPreferredOrientations([
-        DeviceOrientation.landscapeRight,
-      ]);
-    }
-
     _loadingTimer = Timer.periodic(Duration(milliseconds: 1000), (timer) {
       if (_loadingOpacity == 1) {
         _loadingOpacity = 0;
@@ -79,14 +73,16 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
     });
 
     viewModel.initialize(this).then((_) async {
-      await windowManager.ensureInitialized();
+      // await windowManager.ensureInitialized();
       _loadingTimer!.cancel();
-      windowManager.setFullScreen(true);
-      windowManager.setTitle("Escape From Heat Island!");
+      // windowManager.setFullScreen(true);
+      // windowManager.setTitle("Escape From Heat Island!");
     });
   }
 
   Offset _last = Offset.zero;
+  double? _lastScale;
+  bool _scaling = false;
 
   @override
   Widget build(BuildContext context) {
@@ -110,9 +106,9 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                               child: StrokedText(text: "LOADING"))),
                     if (state == GameState.Play)
                       Positioned(
-                          top: 20,
-                          left: 175,
-                          right: 175,
+                          bottom: 20,
+                          left: 10,
+                          right: 10,
                           child: IntroWidget(
                             viewModel: viewModel,
                           )),
@@ -150,14 +146,14 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                     if (state == GameState.Play)
                       Positioned(
                           left: 20,
-                          top: 20,
+                          top: 50,
                           child: TemperatureWidget(
                             viewModel: viewModel,
                           )),
                     if (state == GameState.Play)
                       Positioned(
                           right: 20,
-                          top: 20,
+                          top: 50,
                           child: CharacterWidget(
                             viewModel: viewModel,
                           )),
@@ -168,6 +164,9 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                             behavior: HitTestBehavior.translucent,
                             onPointerDown: (event) {
                               viewModel.closeContextMenu();
+                              if (_scaling) {
+                                return;
+                              }
                             },
                             onPointerPanZoomUpdate: (event) {
                               if (viewModel.enableCameraMovement) {
@@ -175,13 +174,16 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                                     z: event.delta.dy / 10, modelspace: true);
                               }
                             },
-                            onPointerUp: (event) {
-                              Future.delayed(Duration(milliseconds: 50))
-                                  .then((value) {
-                                viewModel.setCanOpenTileMenu(true);
-                              });
+                            onPointerUp: (event) async {
+                              if (_scaling) {
+                                return;
+                              }
+                              viewModel.setCanOpenTileMenu(true);
                             },
                             onPointerMove: (move) {
+                              if (_scaling) {
+                                return;
+                              }
                               if (viewModel.enableCameraMovement) {
                                 viewModel.setCanOpenTileMenu(false);
                                 if (move.buttons == kTertiaryButton) {
@@ -205,6 +207,31 @@ class _MyHomePageState extends State<MyHomePage> with TickerProviderStateMixin {
                                 enableCamera: false,
                                 enablePicking: true,
                                 controller: viewModel.filamentController,
+                                onScaleEnd: (event) {
+                                  _scaling = false;
+                                  viewModel.setCanOpenTileMenu(true);
+                                },
+                                onScaleStart: (event) {
+                                  if (event.pointerCount != 2) {
+                                    return;
+                                  }
+                                  viewModel.setCanOpenTileMenu(false);
+                                  _scaling = true;
+                                },
+                                onScaleUpdate: (event) {
+                                  if (event.pointerCount != 2) {
+                                    return;
+                                  }
+                                  _scaling = true;
+                                  if (_lastScale != null) {
+                                    viewModel.moveCamera(
+                                        z: event.scale > _lastScale!
+                                            ? 0.1
+                                            : -0.1,
+                                        modelspace: true);
+                                  }
+                                  _lastScale = event.scale;
+                                },
                                 child: Container(color: Colors.transparent)))),
                     if (state == GameState.Loaded ||
                         state == GameState.Pause ||

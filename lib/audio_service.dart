@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'dart:io';
-import 'package:audio_session/audio_session.dart';
 import 'package:audioplayers/audioplayers.dart' as ap;
 import 'package:flutter/services.dart';
 import 'package:flutter_sound/flutter_sound.dart';
@@ -15,107 +14,6 @@ import 'package:wave_builder/wave_builder.dart';
 enum AudioSource { Asset, File }
 
 class AudioService {
-  Future<bool> initialize() async {
-    final session = await AudioSession.instance;
-
-    try {
-      await session.configure(AudioSessionConfiguration(
-        avAudioSessionCategory: AVAudioSessionCategory.playAndRecord,
-        avAudioSessionCategoryOptions:
-            AVAudioSessionCategoryOptions.defaultToSpeaker,
-        avAudioSessionMode: AVAudioSessionMode.defaultMode,
-        // avAudioSessionRouteSharingPolicy:
-        //     AVAudioSessionRouteSharingPolicy.defaultPolicy,
-        // avAudioSessionSetActiveOptions:
-        //     AVAudioSessionSetActiveOptions.notifyOthersOnDeactivation,
-        androidAudioAttributes: AndroidAudioAttributes(
-            contentType: AndroidAudioContentType.speech,
-            flags: AndroidAudioFlags.none,
-            usage: AndroidAudioUsage.media),
-        androidAudioFocusGainType: AndroidAudioFocusGainType.gain,
-        androidWillPauseWhenDucked: true,
-      ));
-    } catch (err) {
-      print("WARNING: Audio initialization error. $err ");
-      // this will regularly throw exceptions on iOS during dev mode
-      // what to do here?
-    }
-    print("Audio player initialized");
-    return true;
-  }
-
-  static void encodeWav(File outfile, Uint8List data,
-      {int sampleRate = 16000}) {
-    var waveBuilder = WaveBuilder(frequency: sampleRate, stereo: false);
-    waveBuilder.appendFileContents(data);
-    outfile.writeAsBytesSync(waveBuilder.fileBytes);
-  }
-
-  ///
-  /// Plays the provided stream. Must be PCM16 encoded audio.
-  ///
-  Future<Playing> playBuffer(
-    Uint8List data,
-    int length, {
-    int sampleRate = 16000,
-    void Function()? onStart,
-  }) async {
-    final done = Completer();
-    if (Platform.isLinux) {
-      var file = File((await getTemporaryDirectory()).path +
-          "/flutter_tts_onnx_stream.pcm");
-      file.writeAsBytesSync(data);
-      onStart?.call();
-      await Process.run(
-          "ffplay",
-          "-nodisp -ar 16000 -f s16le ${file.path} -autoexit"
-              .split(" ")
-              .toList());
-      done.complete();
-      print("Wrote to ${file.path}");
-      return Playing(
-          onCancel: () {
-            throw Exception("TODO");
-          },
-          completed: done.future);
-    } else if (Platform.isWindows) {
-      var file = File((await getTemporaryDirectory()).path +
-          Platform.pathSeparator +
-          "flutter_tts_onnx_stream.wav");
-      encodeWav(file, data);
-
-      print("Wrote to ${file.path}");
-      final _player = ja.AudioPlayer();
-      await _player.setAudioSource(ja.AudioSource.file(file.path),
-          preload: true);
-      onStart?.call();
-      var completed = _player.play();
-      return Playing(
-          onCancel: () async {
-            await _player!.stop();
-          },
-          completed: completed);
-    } else {
-      final _player =
-          await FlutterSoundPlayer(logLevel: Level.error).openPlayer()!;
-      _player?.setLogLevel(Level.error);
-      onStart?.call();
-      await _player!.startPlayer(
-          fromDataBuffer: data,
-          codec: s.Codec.pcm16,
-          numChannels: 1,
-          sampleRate: sampleRate,
-          whenFinished: () {
-            done.complete();
-          });
-      return Playing(
-          onCancel: () async {
-            await _player!.stopPlayer();
-          },
-          completed: done.future);
-    }
-  }
-
   ///
   /// Plays the audio located at the specified [path] (interpreted as either a file or asset path, depending on [source])
   ///

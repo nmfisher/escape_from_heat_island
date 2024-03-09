@@ -138,12 +138,13 @@ class GameViewModel {
 
   void _onPickResult(PickResult event) async {
     if (!_canOpenTileMenu) {
+      print("Ignoring pick result");
       return;
     }
+
     var entity = event.entity;
     var x = event.x;
     var y = event.y;
-
     if (_footpaths
         .where((f) => f.instance == entity || f.children.contains(entity))
         .isNotEmpty) {
@@ -264,6 +265,7 @@ class GameViewModel {
     await _filamentController.setCameraManipulatorOptions(
         zoomSpeed: 5, mode: ManipulatorMode.ORBIT);
     await _filamentController.setToneMapping(ToneMapper.LINEAR);
+    await _filamentController.setPostProcessing(true);
     await _filamentController.setRendering(true);
     playCameraLandscapeAnimation();
     _initialized.complete(true);
@@ -289,12 +291,14 @@ class GameViewModel {
     });
 
     await _filamentController.playAnimationByName(_intro!, "CameraIntro",
-        replaceActive: false);
+        replaceActive: true);
 
     await _filamentController.playAnimationByName(_intro!, "EmptyIntro",
         replaceActive: false);
+
     await _filamentController.playAnimationByName(_intro!, "CharacterIntro",
         replaceActive: false);
+    print("EMPTY INTRO COMPLETE");
   }
 
   Future _loadIntro() async {
@@ -310,11 +314,12 @@ class GameViewModel {
   Timer? _cameraLandscapeAnimation;
 
   Future stopCameraLandscapeAnimation() async {
+    print("Stopping camera landcsape");
     _cameraLandscapeAnimation?.cancel();
   }
 
   Future playCameraLandscapeAnimation() async {
-    stopCameraLandscapeAnimation();
+    await stopCameraLandscapeAnimation();
     var camera = await _filamentController.getChildEntity(_intro!, "Camera");
     double xOffset = 0.0;
     int buildingNum = 2;
@@ -683,9 +688,8 @@ class GameViewModel {
   }
 
   void _onGameStateUpdate() {
-    _canOpenTileMenu = false;
-
     if (state.value == GameState.GameOver) {
+      _canOpenTileMenu = false;
       _crowdLoop?.cancel();
       _vehicleLoop?.cancel();
       _buildingLoop?.cancel();
@@ -715,7 +719,7 @@ class GameViewModel {
       Future.delayed(Duration(milliseconds: (100 * _rnd.nextDouble()).toInt()))
           .then((value) async {
         await _filamentController.playAnimationByName(char.instance!, "Walk",
-            loop: true);
+            loop: true, replaceActive: true);
         if (char.leftBaby != null) {
           await _filamentController.playAnimationByName(char.leftBaby!, "Walk",
               loop: true);
@@ -791,11 +795,13 @@ class GameViewModel {
         await _filamentController.testCollisions(barrier);
       }
       for (final vehicle in _vehicles) {
-        await _filamentController.testCollisions(vehicle.hitboxBack!);
+        if (vehicle.hitboxBack != null)
+          await _filamentController.testCollisions(vehicle.hitboxBack!);
         if (vehicle.paused) {
           continue;
         }
-        await _filamentController.testCollisions(vehicle.hitboxFront!);
+        if (vehicle.hitboxFront != null)
+          await _filamentController.testCollisions(vehicle.hitboxFront!);
 
         vehicle.position.x += vehicle.speed;
 
@@ -810,9 +816,11 @@ class GameViewModel {
             vehicle.paused = false;
           });
         } else {
-          _filamentController.queuePositionUpdate(
-              vehicle.instance!, 0, 0, vehicle.speed,
-              relative: true);
+          if (vehicle.instance != null) {
+            _filamentController.queuePositionUpdate(
+                vehicle.instance!, 0, 0, vehicle.speed,
+                relative: true);
+          }
         }
       }
     });
@@ -839,16 +847,6 @@ class GameViewModel {
   }
 
   Future plantTree() async {
-    if (_intro != null && !introTreePlanted) {
-      introTreePlanted = true;
-      Future.delayed(const Duration(milliseconds: 500)).then((_) async {
-        await playReviveAnimation();
-        await Future.delayed(const Duration(seconds: 3));
-        await _filamentController.playAnimationByName(
-            _intro!, "CameraRoadView");
-        await _loadVehicles();
-      });
-    }
     closeContextMenu();
     var idx = (_rnd.nextDouble() * 4).toInt();
     var char = "ABCDE".substring(idx, idx + 1);
@@ -865,14 +863,18 @@ class GameViewModel {
     controller.addListener(() async {
       await _filamentController.setScale(tree, controller.value * 2.0);
     });
-    controller.addStatusListener((status) {
-      if (status == AnimationStatus.completed) {
-        controller.dispose();
-        temperature.value = max(25, temperature.value - 1.0);
-      }
-    });
 
-    controller.forward();
+    await controller.forward();
+
+    temperature.value = max(25, temperature.value - 1.0);
+
+    if (_intro != null && !introTreePlanted) {
+      introTreePlanted = true;
+      await playReviveAnimation();
+      await Future.delayed(const Duration(seconds: 3));
+      print("Playing CameraRoadView");
+      await _filamentController.playAnimationByName(_intro!, "CameraRoadView");
+    }
   }
 
   late Matrix4 _cameraModelMatrix;

@@ -57,9 +57,7 @@ class _IntroWidgetState extends State<IntroWidget> {
       } else if (text[_step].startsWith("Plant trees")) {
         await widget.viewModel.stopCameraLandscapeAnimation();
         widget.viewModel.startBuildingLoop();
-      } else {
-        throw Exception("UNRECOGNIZED");
-      }
+      } else {}
     });
     WidgetsBinding.instance.addPostFrameCallback((timeStamp) async {
       await widget.viewModel.startCrowdMotion();
