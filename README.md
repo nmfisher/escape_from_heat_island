@@ -8,6 +8,8 @@ Save the neighbourhood from increasing temperatures by planting trees to increas
 
 ## Getting Started
 
+The game has been built using the [flutter_filament](https://github.com/nmfisher/flutter_filament) Flutter package I developed. This is still highly experimental, so the package installation/build process is a bit more complex than normal.
+
 ```
 flutter channel master
 flutter upgrade
