@@ -1,16 +1,20 @@
-# untitled_flutter_game_project
+# Escape From Heat Island
 
-A new Flutter project.
+![store_cover_merged_itch](https://github.com/nmfisher/escape_from_heat_island/assets/7238578/856c0526-8aaa-4d0c-97c6-65353d7c9d2a)
+
+A cross-platform, 3D game for the Flutter Global Gamers Challenge.
+
+Save the neighbourhood from increasing temperatures by planting trees to increase shade!
 
 ## Getting Started
 
-This project is a starting point for a Flutter application.
-
-A few resources to get you started if this is your first Flutter project:
-
-- [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
-
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+```
+flutter channel master
+flutter upgrade
+mkdir ~/escape_from_heat_island
+git clone git@github.com:nmfisher/escape_from_heat_island.git
+git clone git@github.com:nmfisher/flutter_filament.git
+cd flutter_filament && git lfs pull && git checkout develop
+cd ../escape_from_heat_island
+flutter run -d <your device>
+```
